@@ -176,7 +176,7 @@ static void setup_main_window(Config *config, UI *ui)
 }
 
 
-/* Move the Main Window to the Center of the Primary Monitor
+/* Move the Main Window to the Bottom Right of the Primary Monitor
  *
  * This is done after the main window is shown(via the "show" signal) so that
  * the width of the window is properly calculated. Otherwise the returned size
@@ -196,8 +196,8 @@ static void place_main_window(GtkWidget *main_window, gpointer user_data)
 
     gtk_window_move(
         GTK_WINDOW(main_window),
-        primary_monitor_geometry.x + primary_monitor_geometry.width / 2 - window_width / 2,
-        primary_monitor_geometry.y + primary_monitor_geometry.height / 2 - window_height / 2);
+        primary_monitor_geometry.x + primary_monitor_geometry.width - window_width - 10,
+        primary_monitor_geometry.y + primary_monitor_geometry.height - window_height - 10);
 }
 
 
