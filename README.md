@@ -1,6 +1,6 @@
 # Mini-Greeter
 
-[![AUR package](https://repology.org/badge/version-for-repo/aur/lightdm-mini-greeter.svg)](https://aur.archlinux.org/packages/lightdm-mini-greeter) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/a1c58074072542be8ea60d1bf14863fc)](https://www.codacy.com/app/pavan-rikhi-agit/lightdm-mini-greeter?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=prikhi/lightdm-mini-greeter&amp;utm_campaign=Badge_Grade)
+[![AUR package](https://repology.org/badge/version-for-repo/aur/lightdm-mini-greeter.svg)](https://aur.archlinux.org/packages/lightdm-mini-greeter) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/a1c58074072542be8ea60d1bf14863fc)](https://www.codacy.com/gh/prikhi/lightdm-mini-greeter/dashboard)
 
 A minimal but highly configurable single-user GTK3 greeter for LightDM.
 
@@ -26,9 +26,10 @@ Right now you can:
 * log in
 * hide the `Password:` label & customize the text
 * hide the password input's cursor
-* set the size of the login window, the font & every color.
-* set a background image.
-* use modifiable hotkeys to trigger a shutdown, restart, hibernate or suspend.
+* set the password masking character
+* set the size of the login window, the font, & every color
+* set a background image
+* use modifiable hotkeys to trigger a shutdown, restart, hibernate, or suspend
 
 ![A screen with a dark background and a single password input box in the center](http://bugs.sleepanarchy.com/projects/mini-greeter/repository/revisions/master/entry/screenshot.png "Mini Greeter Screenshot")
 
@@ -41,7 +42,7 @@ Install the [lightdm-mini-greeter package][aur-package] from the Arch User
 Repository:
 
 ```sh
-packer -S lightdm-mini-greeter
+yay -S lightdm-mini-greeter
 ```
 
 ### Gentoo Linux
@@ -95,6 +96,9 @@ fakeroot dh binary
 sudo dpkg -i ../lightdm-mini-greeter_*.deb
 ```
 
+Note: on Ubuntu, you need `liblightdm-gobject-1-dev` instead of
+`liblightdm-gobject-dev`.
+
 ### Manual
 
 You will need `automake`, `pkg-config`, `gtk+`, & `liblightdm-gobject` to build
@@ -117,7 +121,7 @@ Run `sudo make uninstall` to remove the greeter.
 Once installed, you should specify `lightdm-mini-greeter` as your
 `greeter-session` in `/etc/lightdm/lightdm.conf`. If you have multiple Desktop
 Environments or Window Managers installed, you can specify the one to start by
-changing the `user-session` option as well(look in `/usr/share/xsession` for
+changing the `user-session` option as well(look in `/usr/share/xsessions` for
 possible values).
 
 Modify `/etc/lightdm/lightdm-mini-greeter.conf` to customize the greeter. At
@@ -140,10 +144,10 @@ location won't work.
 
 If your keyboard layout is loaded from your shell configuration files (`.bashrc`
 for example) then it might not be possible to type certain characters after
-installing lightdm-mini-greeter. You should consider modifying your 
+installing lightdm-mini-greeter. You should consider modifying your
 [Xorg keyboard configuration](https://wiki.archlinux.org/index.php/Xorg/Keyboard_configuration#Using_X_configuration_files).
 
-For example for a french keyboard layout (azerty) you should edit/create 
+For example for a french keyboard layout (azerty) you should edit/create
 `/etc/X11/xorg.conf.d/00-keyboard.conf` with at least the following options:
 
 ```
@@ -154,6 +158,47 @@ Section "InputClass"
         Option "XkbLayout" "fr"
 EndSection
 ```
+
+### Config file in $HOME
+
+You may wish to include your config file in their your home folder/dotfiles so
+it is version controlled & easily transferable between systems. This is
+possible, but on most systems, LightDM will not be able to read the
+configuration file due to permission errors.
+
+The proper way to handle this is to loosen the permissions on your home
+directory a bit.
+
+Start off by adding the `lightdm` user to your user's group:
+
+    sudo usermod -aG $(whoami) lightdm
+
+Allow your user group to read your home directory:
+
+    chmod g+rx ~
+
+Move the mini-greeter config file:
+
+    sudo mv /etc/lightdm/lightdm-mini-greeter.conf ~/.dotfiles/mini-greeter.conf
+
+And then add a symlink pointing to the file in your home directory:
+
+    sudo ln -s ~/.dotfiles/mini-greeter.conf /etc/lightdm/lightdm-mini-greeter.conf
+
+And finally log out & restart LightDM:
+
+    sudo systemctl restart lightdm
+
+If LightDM fails to start back up, check the greeter's log file(usually at
+`/var/log/lightdm/seat0-greeter.log`) for the following line:
+
+    Could not load configuration file: Permission denied
+
+If present, your permissions need further adjustment. You can test your
+permissions by attempting to read the file with `sudo`:
+
+    sudo -u lightdm cat ~/.dotfiles/mini-greeter.conf
+
 
 ## Contribute
 

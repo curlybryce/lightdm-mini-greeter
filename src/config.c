@@ -15,8 +15,10 @@ static gint parse_greeter_integer(GKeyFile *keyfile, const char *group_name,
                                   const char *key_name, const gint fallback);
 static GdkRGBA *parse_greeter_color_key(GKeyFile *keyfile, const char *key_name);
 static guint parse_greeter_hotkey_keyval(GKeyFile *keyfile, const char *key_name);
-static gboolean parse_greeter_password_alignment(GKeyFile *keyfile);
+static gunichar *parse_greeter_password_char(GKeyFile *keyfile);
+static gfloat parse_greeter_password_alignment(GKeyFile *keyfile);
 static gboolean is_rtl_keymap_layout(void);
+gboolean input_string_equals(gchar *input_str, const gchar * const fixed_str);
 
 /* Initialize the configuration, sourcing the greeter's configuration file */
 Config *initialize_config(void)
@@ -28,10 +30,16 @@ Config *initialize_config(void)
 
     // Load the key-value file
     GKeyFile *keyfile = g_key_file_new();
+    GError *keyerror = NULL;
     gboolean keyfile_loaded = g_key_file_load_from_file(
-        keyfile, CONFIG_FILE, G_KEY_FILE_NONE, NULL);
+        keyfile, CONFIG_FILE, G_KEY_FILE_NONE, &keyerror);
     if (!keyfile_loaded) {
-        g_error("Could not load configuration file.");
+        if (keyerror != NULL) {
+            g_error("Could not load configuration file: %s", keyerror->message);
+            free(keyerror);
+        } else {
+            g_error("Could not load configuration file.");
+        }
     }
 
     // Parse values from the keyfile into a Config.
@@ -106,6 +114,8 @@ Config *initialize_config(void)
     config->border_width = g_key_file_get_string(
         keyfile, "greeter-theme", "border-width", NULL);
     // Password
+    config->password_char =
+        parse_greeter_password_char(keyfile);
     config->password_color =
         parse_greeter_color_key(keyfile, "password-color");
     config->password_background_color =
@@ -121,6 +131,8 @@ Config *initialize_config(void)
     }
     config->password_border_width = parse_greeter_string(
         keyfile, "greeter-theme", "password-border-width", config->border_width);
+    config->password_border_radius = parse_greeter_string(
+        keyfile, "greeter-theme", "password-border-radius", "0.341125em");
 
     gint layout_spacing =
         g_key_file_get_integer(keyfile, "greeter-theme", "layout-space", NULL);
@@ -154,23 +166,25 @@ void destroy_config(Config *config)
     free(config->border_width);
     free(config->password_label_text);
     free(config->invalid_password_text);
+    free(config->password_char);
     free(config->password_color);
     free(config->password_background_color);
     free(config->password_border_color);
     free(config->password_border_width);
+    free(config->password_border_radius);
     free(config);
 }
 
 
-/* Parse a string from the config file, returning the fallback value if the key
- * is not present in the group.
+/* Parse a string from the config file, returning a copy of the fallback value
+ * if the key is not present in the group.
  */
 static gchar *parse_greeter_string(GKeyFile *keyfile, const char *group_name,
                                    const char *key_name, const gchar *fallback)
 {
     gchar *parsed_string = g_key_file_get_string(keyfile, group_name, key_name, NULL);
     if (parsed_string == NULL) {
-        return (gchar *) fallback;
+        return g_strdup(fallback);
     } else {
         return parsed_string;
     }
@@ -184,7 +198,7 @@ static gint parse_greeter_integer(GKeyFile *keyfile, const char *group_name,
 {
     GError *parse_error = NULL;
     gint parse_result = g_key_file_get_integer(
-        keyfile, "greeter", "password-input-width", &parse_error);
+        keyfile, group_name, key_name, &parse_error);
     if (parse_error != NULL) {
         if (parse_error->code == G_KEY_FILE_ERROR_INVALID_VALUE) {
             // Read the value as a string so we can log it
@@ -235,42 +249,101 @@ static guint parse_greeter_hotkey_keyval(GKeyFile *keyfile, const char *key_name
     return gdk_unicode_to_keyval((guint) key[0]);
 }
 
+/* Parse the password masking character that should be displayed when typing
+ * into the password input.
+ *
+ * We first attempt to parse a literal -1 or 0, where -1 means to use the
+ * default character & 0 means to display no characters when typing a password.
+ *
+ * If that parsing fails, we attempt to parse the field as a string & use the
+ * first character of the string. If the string is empty or parsing fails, we
+ * fall back to the default characer.
+ *
+ * Since the related gtk_entry function takes a unsigned int, we use pointers,
+ * where NULL means "use the default" & all other values indicate an argument
+ * to the `gtk_entry_set_invisible_char` function.
+ *
+ */
+static gunichar *parse_greeter_password_char(GKeyFile *keyfile)
+{
+    const char *const group_name = "greeter-theme";
+    const char *const key_name = "password-character";
+    GError *parse_error = NULL;
+
+    // Attempt the int parsing
+
+    const gint int_result = g_key_file_get_integer(
+        keyfile, group_name, key_name, &parse_error);
+    // Matches -1
+    if (int_result == -1) {
+        return NULL;
+    }
+
+    gunichar *result = malloc(sizeof(gunichar));
+    // Matches 0
+    if (int_result == 0 && parse_error == NULL) {
+        *result = 0;
+        return result;
+    } else if (parse_error != NULL) {
+        g_error_free(parse_error);
+    }
+
+    // Atempt the string parsing
+
+    gchar *str_result = g_key_file_get_string(
+        keyfile, group_name, key_name, NULL);
+
+    // Invalid or 0-length string
+    if (str_result == NULL || strlen(str_result) == 0) {
+        if (str_result != NULL) {
+            free(str_result);
+        }
+        free(result);
+        return NULL;
+    }
+
+    // Convert to unicode code points
+    gunichar *unicode_str = g_utf8_to_ucs4(str_result, -1, NULL, NULL, NULL);
+    free(str_result);
+
+    if (unicode_str == NULL) {
+        free(result);
+        return NULL;
+    }
+
+    *result = unicode_str[0];
+    g_free(unicode_str);
+    return result;
+}
+
 /* Parse the password input alignment, properly handling RTL layouts.
  *
  * Note that the gboolean returned by this function is meant to be used with
  * the `gtk_entry_set_alignment` function.
  */
-static gboolean parse_greeter_password_alignment(GKeyFile *keyfile) {
-    gboolean initial_alignment;
+static gfloat parse_greeter_password_alignment(GKeyFile *keyfile)
+{
+    gfloat alignment;
 
-    gchar *password_alignment_text = g_key_file_get_string(
-        keyfile, "greeter", "password-alignment", NULL);
-    if (password_alignment_text == NULL) {
-        initial_alignment = 1;
-    } else {
-        if (strcmp(g_strchomp(password_alignment_text), "left") == 0) {
-            initial_alignment = 0;
-        } else {
-            initial_alignment = 1;
-        }
-        free(password_alignment_text);
-    }
+    gchar *password_alignment_text = parse_greeter_string(
+        keyfile, "greeter", "password-alignment", "right");
+    gboolean is_rtl = is_rtl_keymap_layout();
 
-    // The left/right values are switched for RTL layouts.
-    if (is_rtl_keymap_layout()) {
-        if (initial_alignment == 0) {
-            return 1;
-        } else {
-            return 0;
-        }
+    if (input_string_equals(password_alignment_text, "left")) {
+        alignment = is_rtl ? 1 : 0;
+    } else if (input_string_equals(password_alignment_text, "center")) {
+        alignment = 0.5;
     } else {
-        return initial_alignment;
+        alignment = is_rtl ? 0 : 1;
     }
+    free(password_alignment_text);
+    return alignment;
 }
 
 /* Determine if the default Display's Keymap is in the Right-to-Left direction
  */
-static gboolean is_rtl_keymap_layout(void) {
+static gboolean is_rtl_keymap_layout(void)
+{
     GdkDisplay *display = gdk_display_get_default();
     if (display == NULL) {
         return FALSE;
@@ -278,4 +351,11 @@ static gboolean is_rtl_keymap_layout(void) {
     GdkKeymap *keymap = gdk_keymap_get_for_display(display);
     PangoDirection text_direction = gdk_keymap_get_direction(keymap);
     return text_direction == PANGO_DIRECTION_RTL;
+}
+
+/* Take a string from the config file, trim any whitespace & check it's
+ * equality with a fixed string.
+ */
+gboolean input_string_equals(gchar *input_str, const gchar * const fixed_str) {
+    return strcmp(g_strchomp(input_str), fixed_str) == 0;
 }

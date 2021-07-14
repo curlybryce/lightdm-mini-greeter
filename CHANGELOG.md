@@ -2,6 +2,23 @@
 
 ## master
 
+
+## v0.5.1
+
+* Fix crash when `password-alignment` option is missing from configuration
+  file.
+
+## v0.5.0
+
+* Allow setting the `password-alignment` option to `center`, in addition to
+  `left` or `right`.
+* Add a `password-border-radius` configuration option to set the border radius
+  of the password input.
+* Add a `password-character` configuration option to set the character used to
+  mask the entered password. `-1` specifies the default character, `0` hides
+  any entered text, & the first character is used for any other value.
+* Document how to make configuration file a symlink into home directories.
+* Improve error message when configuration file is unreadable.
 * Disable the password input while authenticating. This fixes a bug causing
   lightdm to crash if the greeter tried authenticating before a previous
   authentication attempt had completed.

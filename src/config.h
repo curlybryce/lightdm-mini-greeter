@@ -16,7 +16,7 @@ typedef struct Config_ {
     gchar    *password_label_text;
     gchar    *invalid_password_text;
     gboolean  show_input_cursor;
-    gboolean  password_alignment;
+    gfloat    password_alignment;
     gint      password_input_width;
     gboolean  show_image_on_all_monitors;
 
@@ -35,10 +35,12 @@ typedef struct Config_ {
     gchar    *border_width;
     guint     layout_spacing;
     // Password Input
+    gunichar *password_char;
     GdkRGBA  *password_color;
     GdkRGBA  *password_background_color;
     GdkRGBA  *password_border_color;
     gchar    *password_border_width;
+    gchar    *password_border_radius;
 
     /* Hotkeys */
     guint     mod_bit;

@@ -222,8 +222,11 @@ static void create_and_attach_password_field(Config *config, UI *ui)
 {
     ui->password_input = gtk_entry_new();
     gtk_entry_set_visibility(GTK_ENTRY(ui->password_input), FALSE);
+    if (config->password_char != NULL) {
+        gtk_entry_set_invisible_char(GTK_ENTRY(ui->password_input), *config->password_char);
+    }
     gtk_entry_set_alignment(GTK_ENTRY(ui->password_input),
-                            (gfloat) config->password_alignment);
+                            config->password_alignment);
     // TODO: The width is usually a little shorter than we specify. Is there a
     // way to force this exact character width?
     // Maybe use 2 GtkBoxes instead of a GtkGrid?
@@ -311,6 +314,7 @@ static void attach_config_colors_to_screen(Config *config)
             "background-color: %s;\n"
             "border-width: %s;\n"
             "border-color: %s;\n"
+            "border-radius: %s;\n"
             "background-image: none;\n"
             "box-shadow: none;\n"
             "border-image-width: 0;\n"
@@ -340,6 +344,7 @@ static void attach_config_colors_to_screen(Config *config)
         , gdk_rgba_to_string(config->password_background_color)
         , config->password_border_width
         , gdk_rgba_to_string(config->password_border_color)
+        , config->password_border_radius
     );
 
     if (css_string_length >= 0) {
